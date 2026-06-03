@@ -1,0 +1,10 @@
+.env
+node_modules
+dist
+storage/data.json
+storage/users.json
+storage/admins.json
+storage/translation-cache.json
+storage/uploads
+*.log
+.git

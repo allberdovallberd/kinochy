@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-public.ecr.aws/docker/library/postgres:16-alpine}
+    container_name: kinochy_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kinochy}
+      POSTGRES_USER: ${POSTGRES_USER:-kinochy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kinochy}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-public.ecr.aws/docker/library/node:22-alpine}
+    container_name: kinochy_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      TRUST_PROXY: "true"
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:4000}
+      JWT_SECRET: ${JWT_SECRET:-change-me-before-production}
+      DATABASE_URL: postgres://${POSTGRES_USER:-kinochy}:${POSTGRES_PASSWORD:-kinochy}@postgres:5432/${POSTGRES_DB:-kinochy}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kinochy.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-KinochyAdmin@4321!}
+      ADMIN_USER_NAME: ${ADMIN_USER_NAME:-Admin}
+      DEFAULT_USER_NAME: ${DEFAULT_USER_NAME:-Allberdov}
+      DEFAULT_USER_EMAIL: ${DEFAULT_USER_EMAIL:-allberdov@gmail.com}
+      DEFAULT_USER_PASSWORD: ${DEFAULT_USER_PASSWORD:-Kinochy@4321!}
+      TRANSLATE_PROVIDER: ${TRANSLATE_PROVIDER:-libretranslate}
+      LIBRETRANSLATE_URL: ${LIBRETRANSLATE_URL:-https://translate.mstdn.social/translate}
+      LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
+      MYMEMORY_EMAIL: ${MYMEMORY_EMAIL:-}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_SMTP_KEY: ${BREVO_SMTP_KEY:-}
+      BREVO_SMTP_LOGIN: ${BREVO_SMTP_LOGIN:-}
+      BREVO_SMTP_HOST: ${BREVO_SMTP_HOST:-smtp-relay.brevo.com}
+      BREVO_SMTP_PORT: ${BREVO_SMTP_PORT:-587}
+      BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-Allberdov Allberd}
+      BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-allberdovallberd@gmail.com}
+    ports:
+      - "${APP_PORT:-4000}:4000"
+    volumes:
+      - app_storage:/app/storage
+
+volumes:
+  postgres_data:
+  app_storage:
