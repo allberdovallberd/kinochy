@@ -1195,25 +1195,29 @@ a:visited {
 }
 
 .player-controls {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 45px repeat(3, 48px) minmax(90px, 1fr) max-content repeat(4, 48px);
+  gap: 6px;
   align-items: center;
+  width: 100%;
   padding: 8px 10px;
   background: #242829;
+  overflow: visible;
 }
 
 .player-controls button {
   display: grid;
   place-items: center;
-  width: 48px;
   height: 42px;
   padding: 0;
   border-radius: 4px;
   font-weight: 900;
   cursor: pointer;
   touch-action: manipulation;
-  flex: 0 0 auto;
+}
+
+.player-controls button:not(.playbar) {
+  width: 48px;
 }
 
 .player-controls button.active,
@@ -1226,7 +1230,6 @@ a:visited {
   display: grid;
   gap: 4px;
   width: 45px;
-  flex: 0 0 45px;
 }
 
 .compact-stack button {
@@ -1239,15 +1242,9 @@ a:visited {
   line-height: 1;
 }
 
-.playbar {
-  min-width: 96px;
-  flex: 1 1 180px;
-}
-
-.playbar,
-.playbar svg {
-  justify-self: center;
-  align-self: center;
+.player-controls .playbar {
+  min-width: 0;
+  width: 100%;
 }
 
 .playbar svg {
@@ -1256,9 +1253,10 @@ a:visited {
 }
 
 .time-readout {
-  flex: 0 0 auto;
+  justify-self: center;
   white-space: nowrap;
   font-weight: 800;
+  font-size: 14px;
 }
 
 .volume-control {
@@ -1266,7 +1264,6 @@ a:visited {
   display: grid;
   place-items: center;
   width: 48px;
-  flex: 0 0 48px;
 }
 
 .volume-control > button {
@@ -2196,33 +2193,32 @@ a:visited {
   }
 
   .player-controls {
-    gap: 4px;
+    grid-template-columns: 40px repeat(3, 43px) minmax(74px, 1fr) max-content repeat(4, 40px);
+    gap: 5px;
     padding: 7px 8px;
   }
 
-  .player-controls button,
+  .player-controls button:not(.playbar),
   .volume-control,
   .volume-control > button {
     width: 40px;
-    flex-basis: 40px;
   }
 
   .compact-stack {
-    width: 34px;
-    flex-basis: 34px;
+    width: 40px;
   }
 
   .compact-stack button {
-    width: 34px;
+    width: 40px;
   }
 
-  .playbar {
-    min-width: 84px;
-    flex-basis: 84px;
+  .player-controls .playbar {
+    min-width: 0;
+    width: 100%;
   }
 
   .time-readout {
-    display: none;
+    font-size: 13px;
   }
 
   .form-grid,
@@ -2270,34 +2266,37 @@ a:visited {
   }
 
   .player-controls {
+    grid-template-columns: 40px repeat(3, 43px) minmax(74px, 1fr) max-content repeat(4, 40px);
     padding: 7px 8px;
-    gap: 4px;
+    gap: 5px;
   }
 
   .cast-button {
-    display: none;
+    display: grid;
   }
 
-  .player-controls button,
+  .player-controls button:not(.playbar),
   .volume-control,
   .volume-control > button {
-    width: 34px;
-    height: 38px;
-    flex-basis: 34px;
+    width: 40px;
+    height: 40px;
   }
 
   .compact-stack {
-    width: 30px;
-    flex-basis: 30px;
+    width: 40px;
   }
 
   .compact-stack button {
-    width: 30px;
+    width: 40px;
   }
 
-  .playbar {
-    min-width: 72px;
-    flex-basis: 72px;
+  .player-controls .playbar {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .time-readout {
+    font-size: 14px;
   }
 
   .playbar svg {
@@ -2366,16 +2365,20 @@ a:visited {
 
 @media (max-width: 420px) {
   .player-controls {
-    gap: 3px;
-    padding: 6px;
+    grid-template-columns: 34px repeat(3, 36px) minmax(46px, 1fr) max-content repeat(3, 34px);
+    gap: 4px;
+    padding: 6px 5px;
   }
 
-  .player-controls button,
+  .cast-button {
+    display: none;
+  }
+
+  .player-controls button:not(.playbar),
   .volume-control,
   .volume-control > button {
-    width: 32px;
+    width: 34px;
     height: 34px;
-    flex-basis: 32px;
   }
 
   .compact-stack button {
@@ -2384,17 +2387,20 @@ a:visited {
   }
 
   .compact-stack {
-    width: 28px;
-    flex-basis: 28px;
+    width: 34px;
   }
 
   .compact-stack button {
-    width: 28px;
+    width: 34px;
   }
 
-  .playbar {
-    min-width: 64px;
-    flex-basis: 64px;
+  .player-controls .playbar {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .time-readout {
+    font-size: 12px;
   }
 
   .playbar svg {
