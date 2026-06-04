@@ -74,6 +74,7 @@ const allowedOrigins = new Set(
 fs.mkdirSync(uploadRoot, { recursive: true });
 if (process.env.TRUST_PROXY === 'true' || isProduction) app.set('trust proxy', 1);
 
+const uploadMaxBytes = Number(process.env.UPLOAD_MAX_BYTES || 8 * 1024 * 1024 * 1024);
 const upload = multer({
   storage: multer.diskStorage({
     destination: uploadRoot,
@@ -81,7 +82,10 @@ const upload = multer({
       const extension = path.extname(file.originalname);
       done(null, `${Date.now()}-${crypto.randomUUID()}${extension}`);
     }
-  })
+  }),
+  limits: {
+    fileSize: uploadMaxBytes
+  }
 });
 
 app.use(
@@ -544,12 +548,18 @@ if (fs.existsSync(indexFile)) {
 
 app.use((error, _req, res, _next) => {
   console.error(error);
+  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ message: 'Uploaded file is too large.' });
+  }
   res.status(error.status || 500).json({ message: error.message || 'Server error', code: error.code, email: error.email });
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`[kinochy] API listening on http://localhost:${port}`);
 });
+server.requestTimeout = Number(process.env.REQUEST_TIMEOUT_MS || 0);
+server.headersTimeout = Number(process.env.HEADERS_TIMEOUT_MS || 600000);
+server.keepAliveTimeout = Number(process.env.KEEP_ALIVE_TIMEOUT_MS || 65000);
 
 function requireAdmin(req, res, next) {
   try {

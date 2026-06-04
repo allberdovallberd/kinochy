@@ -117,6 +117,9 @@ Important variables:
 - `APP_PORT`: host port exposed by Docker Compose
 - `CLIENT_ORIGIN`: allowed browser origin for CORS
 - `JWT_SECRET`: JWT signing secret
+- `UPLOAD_MAX_BYTES`: maximum size for each uploaded file, default `8589934592` bytes
+- `REQUEST_TIMEOUT_MS`, `HEADERS_TIMEOUT_MS`, `KEEP_ALIVE_TIMEOUT_MS`: Node HTTP timeout settings for large uploads
+- `VIDEO_OPTIMIZE_ON_UPLOAD`: set to `true` only if uploads should wait for FFmpeg optimization before responding
 - `DATABASE_URL`: optional direct PostgreSQL connection string for non-Docker runs
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: PostgreSQL container settings
 - `NODE_IMAGE`, `POSTGRES_IMAGE`: container image overrides if needed
@@ -151,4 +154,5 @@ docker compose logs -f postgres
 - If signup email fails, verify that Brevo transactional sending is enabled and the sender is approved.
 - If Docker cannot pull images, try again or override `NODE_IMAGE` and `POSTGRES_IMAGE` in `.env`.
 - If the browser gets CORS errors, make sure `CLIENT_ORIGIN` exactly matches the URL you open in the browser.
+- If large movie uploads reset near the end, keep `VIDEO_OPTIMIZE_ON_UPLOAD=false`, rebuild the app image, and optimize videos later with `npm run videos:optimize`.
 - If media uploads work but playback fails, check `docker compose logs -f app` and verify uploaded files exist in `app_storage`.

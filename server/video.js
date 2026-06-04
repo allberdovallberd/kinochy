@@ -5,6 +5,7 @@ import path from 'node:path';
 
 export async function prepareUploadedVideo(file) {
   if (!file?.path) return file;
+  if (process.env.VIDEO_OPTIMIZE_ON_UPLOAD !== 'true') return file;
   const optimizedPath = await optimizeVideoFile(file.path);
   if (optimizedPath === file.path) return file;
   return {
