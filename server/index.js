@@ -86,6 +86,7 @@ if (appBasePath) {
 }
 
 const uploadMaxBytes = Number(process.env.UPLOAD_MAX_BYTES || 8 * 1024 * 1024 * 1024);
+const initialMediaChunkBytes = Number(process.env.MEDIA_INITIAL_CHUNK_BYTES || 4 * 1024 * 1024);
 const upload = multer({
   storage: multer.diskStorage({
     destination: uploadRoot,
@@ -643,6 +644,15 @@ function streamFile(req, res, filePath, contentType) {
   }
 
   if (!range) {
+    if (req.method === 'GET' && contentType.startsWith('video/') && stat.size > initialMediaChunkBytes) {
+      const end = Math.min(initialMediaChunkBytes - 1, stat.size - 1);
+      res.writeHead(206, {
+        ...baseHeaders,
+        'Content-Range': `bytes 0-${end}/${stat.size}`,
+        'Content-Length': end + 1
+      });
+      return fs.createReadStream(filePath, { start: 0, end, highWaterMark: 256 * 1024 }).pipe(res);
+    }
     res.writeHead(200, { ...baseHeaders, 'Content-Length': stat.size });
     return fs.createReadStream(filePath, { highWaterMark: 512 * 1024 }).pipe(res);
   }
@@ -668,7 +678,7 @@ function streamFile(req, res, filePath, contentType) {
     'Content-Length': chunkSize
   });
   if (req.method === 'HEAD') return res.end();
-  fs.createReadStream(filePath, { start, end, highWaterMark: 512 * 1024 }).pipe(res);
+  fs.createReadStream(filePath, { start, end, highWaterMark: 256 * 1024 }).pipe(res);
 }
 
 function detectVideoContentType(filePath = '') {

@@ -122,6 +122,7 @@ Important variables:
 - `JWT_SECRET`: JWT signing secret
 - `UPLOAD_MAX_BYTES`: maximum size for each uploaded file, default `8589934592` bytes
 - `REQUEST_TIMEOUT_MS`, `HEADERS_TIMEOUT_MS`, `KEEP_ALIVE_TIMEOUT_MS`: Node HTTP timeout settings for large uploads
+- `MEDIA_INITIAL_CHUNK_BYTES`: first partial video response size when a client does not send a byte range, default `4194304`
 - `VIDEO_OPTIMIZE_ON_UPLOAD`: set to `true` only if uploads should wait for FFmpeg optimization before responding
 - `DATABASE_URL`: optional direct PostgreSQL connection string for non-Docker runs
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: PostgreSQL container settings

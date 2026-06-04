@@ -23,10 +23,12 @@ export default function MoviePlayer({ movie, subtitles }) {
   const lookupRequestRef = useRef(0);
   const playTimeoutRef = useRef(null);
   const seekTimerRef = useRef(null);
+  const hlsRef = useRef(null);
   const lastStageToggleRef = useRef(0);
   const progressSaveRef = useRef(0);
   const resumeAppliedRef = useRef(false);
   const controlsTimerRef = useRef(null);
+  const pageUnloadingRef = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [playRequested, setPlayRequested] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
@@ -90,6 +92,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     let hls;
     let usingFallback = false;
     let disposed = false;
+    hlsRef.current = null;
     setVideoLoading(false);
     setPlayRequested(false);
     resumeAppliedRef.current = false;
@@ -126,6 +129,7 @@ export default function MoviePlayer({ movie, subtitles }) {
           ...compactConfig,
           startFragPrefetch: false
         });
+        hlsRef.current = hls;
         hls.loadSource(hlsSource);
         hls.attachMedia(video);
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -149,6 +153,10 @@ export default function MoviePlayer({ movie, subtitles }) {
       window.clearTimeout(seekTimerRef.current);
       video.removeEventListener('error', fallbackToHls);
       hls?.destroy();
+      hlsRef.current = null;
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
     };
   }, [compactPlayer, hlsSource, prefersHls, videoSource]);
 
@@ -178,11 +186,21 @@ export default function MoviePlayer({ movie, subtitles }) {
   }, [playbackRate]);
 
   useEffect(() => {
-    const save = () => saveMovieProgress(movie.id, videoRef.current?.currentTime, videoRef.current?.duration);
-    window.addEventListener('pagehide', save);
+    pageUnloadingRef.current = false;
+    const saveForRefresh = () => {
+      pageUnloadingRef.current = true;
+      saveMovieProgress(movie.id, videoRef.current?.currentTime, videoRef.current?.duration);
+    };
+    window.addEventListener('pagehide', saveForRefresh);
+    window.addEventListener('beforeunload', saveForRefresh);
     return () => {
-      save();
-      window.removeEventListener('pagehide', save);
+      if (pageUnloadingRef.current) {
+        saveMovieProgress(movie.id, videoRef.current?.currentTime, videoRef.current?.duration);
+      } else {
+        clearMovieProgress(movie.id);
+      }
+      window.removeEventListener('pagehide', saveForRefresh);
+      window.removeEventListener('beforeunload', saveForRefresh);
     };
   }, [movie.id]);
 
@@ -286,7 +304,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     cleanupPreview();
     window.clearTimeout(seekTimerRef.current);
     setPreviewPinnedIndex(null);
-    const next = setVideoTime(video, time);
+    const next = seekVideo(video, time, play || playing, hlsRef.current);
     setCurrentTime(next);
     rememberProgress(next, video?.duration);
     if (play) {
@@ -298,13 +316,8 @@ export default function MoviePlayer({ movie, subtitles }) {
   function scrub(event) {
     closePanels();
     const value = Number(event.target.value);
-    const video = videoRef.current;
     setCurrentTime(value);
     window.clearTimeout(seekTimerRef.current);
-    seekTimerRef.current = window.setTimeout(() => {
-      setVideoTime(video, value);
-      if (playing) setVideoLoading(needsMoreVideoData(video));
-    }, compactPlayer ? 120 : 70);
   }
 
   function commitScrub(event) {
@@ -312,7 +325,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     const value = Number(event.target.value);
     const video = videoRef.current;
     window.clearTimeout(seekTimerRef.current);
-    const next = setVideoTime(video, value);
+    const next = seekVideo(video, value, true, hlsRef.current);
     setCurrentTime(next);
     rememberProgress(next, video?.duration);
     if (playing) setVideoLoading(needsMoreVideoData(video));
@@ -361,7 +374,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     setPreviewPinnedIndex(null);
     const max = Number.isFinite(video.duration) ? video.duration : duration || 0;
     const next = Math.min(Math.max(video.currentTime + seconds, 0), max || Number.MAX_SAFE_INTEGER);
-    const remembered = setVideoTime(video, next);
+    const remembered = seekVideo(video, next, true, hlsRef.current);
     setCurrentTime(remembered);
     rememberProgress(remembered, video.duration);
     if (playing) setVideoLoading(needsMoreVideoData(video));
@@ -410,7 +423,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     if (!saved || saved < 3) return;
     const total = video.duration;
     if (Number.isFinite(total) && total > 0 && saved > total - 10) return;
-    setCurrentTime(setVideoTime(video, saved));
+    setCurrentTime(seekVideo(video, saved, false, hlsRef.current));
   }
 
   function rememberProgress(time, total) {
@@ -430,7 +443,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     setPreviewPinnedIndex(index);
     setHasStarted(true);
     video.playbackRate = rate;
-    setCurrentTime(setVideoTime(video, cue.start));
+    setCurrentTime(seekVideo(video, cue.start, true, hlsRef.current));
     const stopAtEnd = () => {
       if (video.currentTime >= cue.end) {
         video.pause();
@@ -450,6 +463,9 @@ export default function MoviePlayer({ movie, subtitles }) {
   function startPlayback(video) {
     window.clearTimeout(playTimeoutRef.current);
     video.preload = 'metadata';
+    try {
+      hlsRef.current?.startLoad?.(video.currentTime || 0);
+    } catch {}
     setPlayRequested(true);
     setVideoLoading(needsMoreVideoData(video));
     playTimeoutRef.current = window.setTimeout(() => {
@@ -1307,7 +1323,9 @@ function progressStorageKey(movieId) {
 function readSavedProgress(movieId) {
   if (typeof window === 'undefined' || !movieId) return 0;
   try {
-    const raw = window.localStorage.getItem(progressStorageKey(movieId));
+    const key = progressStorageKey(movieId);
+    window.localStorage?.removeItem(key);
+    const raw = window.sessionStorage.getItem(key);
     if (!raw) return 0;
     const parsed = JSON.parse(raw);
     return Number(parsed.time) || 0;
@@ -1320,13 +1338,25 @@ function saveMovieProgress(movieId, time, total) {
   if (typeof window === 'undefined' || !movieId || !Number.isFinite(time)) return;
   try {
     const key = progressStorageKey(movieId);
+    window.localStorage?.removeItem(key);
     if (time < 3 || (Number.isFinite(total) && total > 0 && time > total - 10)) {
-      window.localStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
       return;
     }
-    window.localStorage.setItem(key, JSON.stringify({ time, updatedAt: Date.now() }));
+    window.sessionStorage.setItem(key, JSON.stringify({ time, updatedAt: Date.now() }));
   } catch {
-    // Ignore storage errors; playback should never depend on localStorage.
+    // Ignore storage errors; playback should never depend on browser storage.
+  }
+}
+
+function clearMovieProgress(movieId) {
+  if (typeof window === 'undefined' || !movieId) return;
+  try {
+    const key = progressStorageKey(movieId);
+    window.sessionStorage.removeItem(key);
+    window.localStorage?.removeItem(key);
+  } catch {
+    // Ignore storage errors; playback should never depend on browser storage.
   }
 }
 
@@ -1373,6 +1403,21 @@ function setVideoTime(video, time) {
     video.fastSeek?.(next);
   }
   return next;
+}
+
+function seekVideo(video, time, shouldLoad, hls) {
+  if (!video || !Number.isFinite(time)) return 0;
+  const next = Math.max(0, time);
+  try {
+    hls?.stopLoad?.();
+  } catch {}
+  const remembered = setVideoTime(video, next);
+  if (shouldLoad) {
+    try {
+      hls?.startLoad?.(remembered);
+    } catch {}
+  }
+  return remembered;
 }
 
 function pickVoice(voices, lang, prefs) {
