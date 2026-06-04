@@ -115,6 +115,7 @@ Important variables:
 
 - `PORT`: internal Node port, normally `4000`
 - `APP_PORT`: host port exposed by Docker Compose
+- `APP_BASE_PATH`: public mount path for subpath deployments, for example `/kinochy`
 - `CLIENT_ORIGIN`: allowed browser origin for CORS
 - `JWT_SECRET`: JWT signing secret
 - `UPLOAD_MAX_BYTES`: maximum size for each uploaded file, default `8589934592` bytes

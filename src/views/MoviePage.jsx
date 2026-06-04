@@ -2,6 +2,7 @@ import { Heart, Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, moviePosterFallback } from '../api.js';
+import { withBasePath } from '../paths.js';
 import MoviePlayer from '../player/MoviePlayer.jsx';
 import { translateAccent, translateGenre, useLocale } from '../ui/locale.jsx';
 
@@ -75,7 +76,7 @@ export default function MoviePage() {
     <section className="movie-page">
       <div className="movie-detail">
         <div className="detail-poster" style={!movie.coverUrl ? { background: moviePosterFallback(movie) } : undefined}>
-          {movie.coverUrl ? <img className="detail-poster-image" src={movie.coverUrl} alt={movie.title} decoding="async" fetchPriority="high" /> : null}
+          {movie.coverUrl ? <img className="detail-poster-image" src={withBasePath(movie.coverUrl)} alt={movie.title} decoding="async" fetchPriority="high" /> : null}
           {!movie.coverUrl ? <span>{movie.title}</span> : null}
         </div>
         <div className="detail-copy">

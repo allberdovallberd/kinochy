@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import AppShell from './ui/AppShell.jsx';
 import AuthPage from './views/AuthPage.jsx';
+import { appBasePath } from './paths.js';
 import './styles.css';
 
 const AdminShell = lazy(() => import('./ui/AdminShell.jsx'));
@@ -13,7 +14,7 @@ const VocabularyPage = lazy(() => import('./views/VocabularyPage.jsx'));
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={appBasePath || undefined}>
       <Suspense fallback={<div className="status app-status">Loading...</div>}>
         <Routes>
           <Route path="/admin/*" element={<AdminShell />} />

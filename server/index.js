@@ -57,6 +57,7 @@ const uploadRoot = path.resolve('storage/uploads');
 const distRoot = path.resolve('dist');
 const assetRoot = path.join(distRoot, 'assets');
 const indexFile = path.join(distRoot, 'index.html');
+const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH || process.env.BASE_PATH || '');
 const adminCookieName = 'kinochy_admin';
 const userCookieName = 'kinochy_user';
 const legacyAdminCookieName = 'filmglish_admin';
@@ -73,6 +74,16 @@ const allowedOrigins = new Set(
 
 fs.mkdirSync(uploadRoot, { recursive: true });
 if (process.env.TRUST_PROXY === 'true' || isProduction) app.set('trust proxy', 1);
+
+if (appBasePath) {
+  app.use((req, res, next) => {
+    if (req.url === appBasePath) return res.redirect(308, `${appBasePath}/`);
+    if (req.url.startsWith(`${appBasePath}/`)) {
+      req.url = req.url.slice(appBasePath.length) || '/';
+    }
+    next();
+  });
+}
 
 const uploadMaxBytes = Number(process.env.UPLOAD_MAX_BYTES || 8 * 1024 * 1024 * 1024);
 const upload = multer({
@@ -695,7 +706,7 @@ function createByteRangePlaylist(movie, cues = []) {
     const seconds = index === segmentCount - 1 ? Math.max(1, duration - targetDuration * index) : targetDuration;
     lines.push(`#EXTINF:${seconds.toFixed(3)},`);
     lines.push(`#EXT-X-BYTERANGE:${length}@${offset}`);
-    lines.push(`/media/movies/${movie.id}/segment.ts`);
+    lines.push('segment.ts');
     offset += length;
   }
 
@@ -730,4 +741,10 @@ function isAllowedOrigin(origin) {
   }
 
   return false;
+}
+
+function normalizeBasePath(value) {
+  const clean = String(value || '').trim();
+  if (!clean || clean === '/') return '';
+  return `/${clean.replace(/^\/+|\/+$/g, '')}`;
 }

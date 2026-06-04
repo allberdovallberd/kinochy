@@ -1,5 +1,7 @@
+import { withBasePath } from './paths.js';
+
 export async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(withBasePath(path), {
     credentials: 'include',
     ...options,
     headers: options.body instanceof FormData ? options.headers : { 'Content-Type': 'application/json', ...options.headers }
@@ -19,7 +21,7 @@ export async function api(path, options = {}) {
 export function apiUpload(path, { method = 'POST', body, headers = {}, onProgress } = {}) {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
-    request.open(method, path, true);
+    request.open(method, withBasePath(path), true);
     request.withCredentials = true;
 
     Object.entries(headers).forEach(([key, value]) => request.setRequestHeader(key, value));

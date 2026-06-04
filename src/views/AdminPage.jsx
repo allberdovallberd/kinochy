@@ -2,6 +2,7 @@ import { Edit3, Film, Image, Lock, LogOut, Plus, Save, Trash2, Upload, Users } f
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { api, apiUpload, moviePosterFallback } from '../api.js';
+import { withBasePath } from '../paths.js';
 import MoviePlayer from '../player/MoviePlayer.jsx';
 import { translateGenre, useLocale } from '../ui/locale.jsx';
 
@@ -139,7 +140,7 @@ function AdminDashboard({ admin, onLogout }) {
       <div className="admin-head">
         <Link to="/admin" className="admin-brand">
           <span className="brand-mark">
-            <img src="/kinochy_favicon.png" alt="" width="32" height="32" />
+            <img src={withBasePath('/kinochy_favicon.png')} alt="" width="32" height="32" />
           </span>
           <span>
             <small>{t('admin_signed_in_as')} {admin.email}</small>
@@ -218,7 +219,7 @@ function AdminMoviesList() {
       <div className="admin-movie-list">
         {movies.map((movie) => (
           <Link key={movie.id} className="admin-movie-row" to={`/admin/movies/${movie.id}`}>
-            <span className="admin-row-cover" style={movie.coverUrl ? { backgroundImage: `url(${movie.coverUrl})` } : { background: moviePosterFallback(movie) }} />
+            <span className="admin-row-cover" style={movie.coverUrl ? { backgroundImage: `url(${withBasePath(movie.coverUrl)})` } : { background: moviePosterFallback(movie) }} />
             <span>
               <strong>{movie.title}</strong>
               <small>{movie.type} / {movie.year} / {movie.genres?.join(', ') || movie.genre}</small>
@@ -290,7 +291,7 @@ function AdminMovieDetail({ requestConfirm }) {
         </div>
       </div>
       <div className="admin-movie-detail">
-        <div className="admin-movie-cover" style={movie.coverUrl ? { backgroundImage: `url(${movie.coverUrl})` } : { background: moviePosterFallback(movie) }} />
+        <div className="admin-movie-cover" style={movie.coverUrl ? { backgroundImage: `url(${withBasePath(movie.coverUrl)})` } : { background: moviePosterFallback(movie) }} />
         <div>
           <h2>{movie.title}</h2>
           <p>{movie.description}</p>
@@ -341,7 +342,7 @@ function AdminMovieEditor() {
 function MovieEditor({ movie, genres, onCancel, onSaved }) {
   const [form, setForm] = useState(() => cloneMovieForm(movie ? movieToForm(movie) : initialMovieForm));
   const [files, setFiles] = useState({});
-  const [coverPreview, setCoverPreview] = useState(movie?.coverUrl || '');
+  const [coverPreview, setCoverPreview] = useState(movie?.coverUrl ? withBasePath(movie.coverUrl) : '');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({});
   const [error, setError] = useState('');
@@ -349,7 +350,7 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
 
   useEffect(() => {
     if (!files.cover) {
-      setCoverPreview(movie?.coverUrl || '');
+      setCoverPreview(movie?.coverUrl ? withBasePath(movie.coverUrl) : '');
       return undefined;
     }
 

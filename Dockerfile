@@ -1,6 +1,8 @@
 ARG NODE_IMAGE=public.ecr.aws/docker/library/node:22-alpine
 
 FROM ${NODE_IMAGE} AS build
+ARG APP_BASE_PATH=/
+ENV APP_BASE_PATH=${APP_BASE_PATH}
 WORKDIR /app
 
 COPY package*.json ./

@@ -2,6 +2,7 @@ import { LogOut, Search } from 'lucide-react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { withBasePath } from '../paths.js';
 import { getLanguageOptions, LocaleProvider, t } from './locale.jsx';
 import AuthPage from '../views/AuthPage.jsx';
 
@@ -70,7 +71,7 @@ export default function AppShell() {
         <header className={`topbar ${publicHeader ? 'public-topbar' : ''}`}>
           <Link to="/" className="brand" aria-label="Kinochy home">
             <span className="brand-mark">
-              <img src="/kinochy_favicon.png" alt="" width="32" height="32" />
+              <img src={withBasePath('/kinochy_favicon.png')} alt="" width="32" height="32" />
             </span>
             <span>Kinochy</span>
           </Link>

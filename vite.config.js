@@ -2,7 +2,10 @@ import react from '@vitejs/plugin-react';
 import legacy from '@vitejs/plugin-legacy';
 import { defineConfig } from 'vite';
 
+const base = normalizeBasePath(process.env.APP_BASE_PATH || process.env.VITE_BASE_PATH || '/');
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     legacy({
@@ -30,3 +33,9 @@ export default defineConfig({
     }
   }
 });
+
+function normalizeBasePath(value) {
+  const clean = String(value || '/').trim();
+  if (!clean || clean === '/') return '/';
+  return `/${clean.replace(/^\/+|\/+$/g, '')}/`;
+}

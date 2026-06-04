@@ -1,6 +1,7 @@
 import { ArrowUpDown, Cast, Check, Expand, Gauge, Grid2x2, Pause, Play, Settings, Volume1, Volume2, VolumeX } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
+import { withBasePath } from '../paths.js';
 import { useLocale } from '../ui/locale.jsx';
 
 const fontMap = {
@@ -77,8 +78,8 @@ export default function MoviePlayer({ movie, subtitles }) {
   const showPausedList = paused && hasStarted && currentTime >= 3 && playerToggles.pauseScript;
   const liveOverlayActive = Boolean((realtimeEnglish && activeEnglish) || (realtimeRussian && activeRussian));
   const fontFamily = fontMap[subtitleStyle.font] || fontMap.Museo;
-  const videoSource = useMemo(() => `/media/movies/${movie.id}/video`, [movie.id]);
-  const hlsSource = useMemo(() => `/media/movies/${movie.id}/playlist.m3u8`, [movie.id]);
+  const videoSource = useMemo(() => withBasePath(`/media/movies/${movie.id}/video`), [movie.id]);
+  const hlsSource = useMemo(() => withBasePath(`/media/movies/${movie.id}/playlist.m3u8`), [movie.id]);
   const prefersHls = String(movie.fileNames?.video || '').toLowerCase().endsWith('.ts');
   const showPlayerLoader = videoLoading && (playing || playRequested);
   const controlsPinned = settingsOpen || playerToolsOpen || volumeOpen;

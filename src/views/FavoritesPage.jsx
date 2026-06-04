@@ -2,6 +2,7 @@ import { Heart, Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, moviePosterFallback } from '../api.js';
+import { withBasePath } from '../paths.js';
 import { translateGenre, useLocale } from '../ui/locale.jsx';
 
 export default function FavoritesPage() {
@@ -36,7 +37,7 @@ export default function FavoritesPage() {
               {movie.coverUrl ? (
                 <img
                   className="poster-image"
-                  src={movie.coverUrl}
+                  src={withBasePath(movie.coverUrl)}
                   alt={movie.title}
                   loading={index < 4 ? 'eager' : 'lazy'}
                   decoding="async"
