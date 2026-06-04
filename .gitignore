@@ -8,3 +8,4 @@ storage/admins.json
 storage/translation-cache.json
 storage/*.txt
 *.log
+*.tar

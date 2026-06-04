@@ -78,6 +78,8 @@ cp .env.example .env
 - `ADMIN_USER_NAME=Admin`
 - `ADMIN_PASSWORD=strong-admin-password`
 - `BREVO_API_KEY=your-brevo-api-key`
+- `BREVO_API_URL=https://api.brevo.com/v3/smtp/email`
+- `BREVO_IP_FAMILY=4`
 - `BREVO_SENDER_NAME=Allberdov Allberd`
 - `BREVO_SENDER_EMAIL=allberdovallberd@gmail.com`
 
@@ -128,6 +130,7 @@ Important variables:
 - `DEFAULT_USER_NAME`, `DEFAULT_USER_EMAIL`, `DEFAULT_USER_PASSWORD`: default seeded user
 - `TRANSLATE_PROVIDER`, `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`: translation service config
 - `BREVO_API_KEY` or `BREVO_SMTP_KEY`: verification email provider config
+- `BREVO_API_URL`, `BREVO_TIMEOUT_MS`, `BREVO_IP_FAMILY`: Brevo API endpoint, timeout, and IP family. Keep `BREVO_IP_FAMILY=4` on servers where IPv6 or Cloudflare routes time out.
 
 ## Production Notes
 
@@ -152,7 +155,7 @@ docker compose logs -f postgres
 
 ## Troubleshooting
 
-- If signup email fails, verify that Brevo transactional sending is enabled and the sender is approved.
+- If signup email fails, verify that Brevo transactional sending is enabled and the sender is approved. If the error says Brevo is unreachable, test outbound HTTPS from the server and keep `BREVO_IP_FAMILY=4`.
 - If Docker cannot pull images, try again or override `NODE_IMAGE` and `POSTGRES_IMAGE` in `.env`.
 - If the browser gets CORS errors, make sure `CLIENT_ORIGIN` exactly matches the URL you open in the browser.
 - If large movie uploads reset near the end, keep `VIDEO_OPTIMIZE_ON_UPLOAD=false`, rebuild the app image, and optimize videos later with `npm run videos:optimize`.

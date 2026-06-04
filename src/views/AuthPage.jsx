@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { api } from '../api.js';
 import { useLocale } from '../ui/locale.jsx';
 
@@ -23,6 +24,7 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [visiblePasswords, setVisiblePasswords] = useState({});
   const navigate = useNavigate();
   const { t } = useLocale();
 
@@ -146,7 +148,12 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
   function switchPanel(nextPanel) {
     setPanel(nextPanel);
     setForm(cloneAuthForm());
+    setVisiblePasswords({});
     setError('');
+  }
+
+  function togglePassword(name) {
+    setVisiblePasswords((value) => ({ ...value, [name]: !value[name] }));
   }
 
   const verifySeconds = Math.max(0, Math.ceil((Date.parse(verification.expiresAt || 0) - now) / 1000));
@@ -198,19 +205,18 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
         ) : null}
 
         {['login', 'signup'].includes(panel) ? (
-          <label>
-            {t('auth_password')}
-            <input
-              name="password"
-              value={form.password}
-              onChange={update}
-              type="password"
-              minLength="8"
-              placeholder={t('auth_password_hint')}
-              autoComplete={panel === 'signup' ? 'new-password' : 'current-password'}
-              required
-            />
-          </label>
+          <PasswordField
+            label={t('auth_password')}
+            name="password"
+            value={form.password}
+            onChange={update}
+            visible={Boolean(visiblePasswords.password)}
+            onToggle={() => togglePassword('password')}
+            minLength="8"
+            placeholder={t('auth_password_hint')}
+            autoComplete={panel === 'signup' ? 'new-password' : 'current-password'}
+            required
+          />
         ) : null}
 
         {panel === 'login' ? (
@@ -220,22 +226,46 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
         ) : null}
 
         {panel === 'signup' ? (
-          <label>
-            {t('auth_confirm_password')}
-            <input name="confirmPassword" value={form.confirmPassword} onChange={update} type="password" minLength="8" placeholder={t('auth_confirm_hint')} autoComplete="new-password" required />
-          </label>
+          <PasswordField
+            label={t('auth_confirm_password')}
+            name="confirmPassword"
+            value={form.confirmPassword}
+            onChange={update}
+            visible={Boolean(visiblePasswords.confirmPassword)}
+            onToggle={() => togglePassword('confirmPassword')}
+            minLength="8"
+            placeholder={t('auth_confirm_hint')}
+            autoComplete="new-password"
+            required
+          />
         ) : null}
 
         {panel === 'reset' ? (
           <>
-            <label>
-              {t('auth_new_password')}
-              <input name="newPassword" value={form.newPassword} onChange={update} type="password" minLength="8" placeholder={t('auth_password_label')} autoComplete="new-password" required />
-            </label>
-            <label>
-              {t('auth_confirm_password')}
-              <input name="confirmNewPassword" value={form.confirmNewPassword} onChange={update} type="password" minLength="8" placeholder={t('auth_confirm_hint')} autoComplete="new-password" required />
-            </label>
+            <PasswordField
+              label={t('auth_new_password')}
+              name="newPassword"
+              value={form.newPassword}
+              onChange={update}
+              visible={Boolean(visiblePasswords.newPassword)}
+              onToggle={() => togglePassword('newPassword')}
+              minLength="8"
+              placeholder={t('auth_password_label')}
+              autoComplete="new-password"
+              required
+            />
+            <PasswordField
+              label={t('auth_confirm_password')}
+              name="confirmNewPassword"
+              value={form.confirmNewPassword}
+              onChange={update}
+              visible={Boolean(visiblePasswords.confirmNewPassword)}
+              onToggle={() => togglePassword('confirmNewPassword')}
+              minLength="8"
+              placeholder={t('auth_confirm_hint')}
+              autoComplete="new-password"
+              required
+            />
           </>
         ) : null}
 
@@ -271,6 +301,32 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
         {!embedded ? <Link className="auth-home-link" to="/">{t('auth_back_home')}</Link> : null}
       </form>
     </section>
+  );
+}
+
+function PasswordField({ label, name, value, onChange, visible, onToggle, ...inputProps }) {
+  return (
+    <label>
+      {label}
+      <span className="password-field">
+        <input
+          name={name}
+          value={value}
+          onChange={onChange}
+          type={visible ? 'text' : 'password'}
+          {...inputProps}
+        />
+        <button
+          type="button"
+          className="password-toggle"
+          onClick={onToggle}
+          aria-label={visible ? 'Hide password' : 'Show password'}
+          title={visible ? 'Hide password' : 'Show password'}
+        >
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </span>
+    </label>
   );
 }
 
