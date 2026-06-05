@@ -32,6 +32,7 @@ import {
   listVocabulary,
   getUserByIdentity,
   listMovies,
+  queueMovieVideoOptimization,
   removeVocabulary,
   removeFavoriteMovie,
   resetUserPassword,
@@ -470,7 +471,9 @@ app.post(
   ]),
   async (req, res, next) => {
     try {
-      res.status(201).json(await createMovie(req.body, req.files || {}));
+      const movie = await createMovie(req.body, req.files || {});
+      queueMovieVideoOptimization(movie.id);
+      res.status(201).json(movie);
     } catch (error) {
       next(error);
     }
@@ -488,7 +491,9 @@ app.patch(
   ]),
   async (req, res, next) => {
     try {
-      res.json(await updateMovie(req.params.id, req.body, req.files || {}));
+      const movie = await updateMovie(req.params.id, req.body, req.files || {});
+      if (req.files?.video?.[0]) queueMovieVideoOptimization(movie.id);
+      res.json(movie);
     } catch (error) {
       next(error);
     }

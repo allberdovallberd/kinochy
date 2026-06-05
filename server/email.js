@@ -3,7 +3,7 @@ import http from 'node:http';
 import https from 'node:https';
 
 export async function sendVerificationEmail({ email, username, code }) {
-  const smtpKey = String(process.env.BREVO_SMTP_KEY || '').trim();
+  const smtpKey = getSmtpKey();
   const apiKey = String(process.env.BREVO_API_KEY || '').trim();
   if (apiKey) {
     try {
@@ -17,6 +17,10 @@ export async function sendVerificationEmail({ email, username, code }) {
   const error = new Error('Brevo is not configured. Set BREVO_SMTP_KEY or BREVO_API_KEY.');
   error.status = 503;
   throw error;
+}
+
+function getSmtpKey() {
+  return String(process.env.BREVO_SMTP_KEY || process.env.BREVO_SMTP_PASSWORD || process.env.SMTP_PASSWORD || '').trim();
 }
 
 async function sendViaBrevoSmtp({ email, username, code, smtpKey }) {

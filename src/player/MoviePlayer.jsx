@@ -22,6 +22,7 @@ export default function MoviePlayer({ movie, subtitles }) {
   const lastTimeUiRef = useRef(0);
   const lookupRequestRef = useRef(0);
   const playTimeoutRef = useRef(null);
+  const bufferingTimeoutRef = useRef(null);
   const seekTimerRef = useRef(null);
   const hlsRef = useRef(null);
   const lastStageToggleRef = useRef(0);
@@ -145,7 +146,7 @@ export default function MoviePlayer({ movie, subtitles }) {
 
     return () => {
       disposed = true;
-      window.clearTimeout(playTimeoutRef.current);
+      clearPlaybackTimers();
       window.clearTimeout(seekTimerRef.current);
       hls?.destroy();
       hlsRef.current = null;
@@ -283,6 +284,13 @@ export default function MoviePlayer({ movie, subtitles }) {
     closePanels();
     cleanupPreview();
     setPreviewPinnedIndex(null);
+    if (playRequested && video.paused) {
+      clearPlaybackTimers();
+      setPlayRequested(false);
+      setVideoLoading(false);
+      video.pause();
+      return;
+    }
     if (video.paused) {
       setHasStarted(true);
       startPlayback(video);
@@ -323,7 +331,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     const next = seekVideo(video, value, true, hlsRef.current);
     setCurrentTime(next);
     rememberProgress(next, video?.duration);
-    if (playing) setVideoLoading(needsMoreVideoData(video));
+    if (playing) beginBuffering(video);
   }
 
   function commitScrubValue(value) {
@@ -333,7 +341,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     const next = seekVideo(video, value, true, hlsRef.current);
     setCurrentTime(next);
     rememberProgress(next, video.duration);
-    if (playing || playRequested) setVideoLoading(needsMoreVideoData(video));
+    if (playing || playRequested) beginBuffering(video);
   }
 
   function fullscreen() {
@@ -355,6 +363,28 @@ export default function MoviePlayer({ movie, subtitles }) {
     setSettingsOpen(false);
     setPlayerToolsOpen(false);
     setVolumeOpen(false);
+  }
+
+  function clearPlaybackTimers() {
+    window.clearTimeout(playTimeoutRef.current);
+    window.clearTimeout(bufferingTimeoutRef.current);
+  }
+
+  function beginBuffering(video) {
+    if (!video || video.paused) return;
+    setVideoLoading(true);
+    window.clearTimeout(bufferingTimeoutRef.current);
+    bufferingTimeoutRef.current = window.setTimeout(() => {
+      if (!video.paused && video.readyState < getMediaReadyState('HAVE_CURRENT_DATA', 2)) {
+        setVideoLoading(false);
+        setPlayRequested(false);
+      }
+    }, 18000);
+  }
+
+  function finishBuffering() {
+    window.clearTimeout(bufferingTimeoutRef.current);
+    setVideoLoading(false);
   }
 
   function revealControls(pinned = false) {
@@ -382,7 +412,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     const remembered = seekVideo(video, next, true, hlsRef.current);
     setCurrentTime(remembered);
     rememberProgress(remembered, video.duration);
-    if (playing) setVideoLoading(needsMoreVideoData(video));
+    if (playing) beginBuffering(video);
   }
 
   function playFromStage() {
@@ -466,7 +496,7 @@ export default function MoviePlayer({ movie, subtitles }) {
   }
 
   function startPlayback(video) {
-    window.clearTimeout(playTimeoutRef.current);
+    clearPlaybackTimers();
     video.preload = 'auto';
     try {
       hlsRef.current?.startLoad?.(video.currentTime || 0);
@@ -635,27 +665,38 @@ export default function MoviePlayer({ movie, subtitles }) {
           disableRemotePlayback
           controlsList="nodownload noplaybackrate"
           onLoadStart={(event) => {
-            if (!event.currentTarget.paused) setVideoLoading(true);
+            if (!event.currentTarget.paused) beginBuffering(event.currentTarget);
           }}
           onWaiting={(event) => {
-            if (!event.currentTarget.paused || playRequested) setVideoLoading(true);
+            if (!event.currentTarget.paused || playRequested) beginBuffering(event.currentTarget);
           }}
           onSeeking={(event) => {
-            if (!event.currentTarget.paused || playRequested) setVideoLoading(true);
+            if (!event.currentTarget.paused || playRequested) beginBuffering(event.currentTarget);
           }}
           onStalled={(event) => {
-            if (!event.currentTarget.paused || playRequested) setVideoLoading(true);
+            if (!event.currentTarget.paused || playRequested) beginBuffering(event.currentTarget);
           }}
           onError={() => {
-            window.clearTimeout(playTimeoutRef.current);
+            clearPlaybackTimers();
             setPlayRequested(false);
             setVideoLoading(false);
           }}
-          onCanPlay={() => setVideoLoading(false)}
-          onCanPlayThrough={() => setVideoLoading(false)}
-          onLoadedData={() => setVideoLoading(false)}
+          onCanPlay={finishBuffering}
+          onCanPlayThrough={finishBuffering}
+          onLoadedData={finishBuffering}
+          onLoadedMetadata={(event) => {
+            finishBuffering();
+            setDuration(event.currentTarget.duration || 0);
+            restoreProgress(event.currentTarget);
+          }}
+          onProgress={(event) => {
+            if (event.currentTarget.readyState >= getMediaReadyState('HAVE_CURRENT_DATA', 2)) finishBuffering();
+          }}
+          onSeeked={(event) => {
+            if (event.currentTarget.readyState >= getMediaReadyState('HAVE_CURRENT_DATA', 2)) finishBuffering();
+          }}
           onPlaying={() => {
-            window.clearTimeout(playTimeoutRef.current);
+            clearPlaybackTimers();
             setPlaying(true);
             setPlayRequested(false);
             setVideoLoading(false);
@@ -667,16 +708,12 @@ export default function MoviePlayer({ movie, subtitles }) {
             closePanels();
           }}
           onPause={() => {
-            window.clearTimeout(playTimeoutRef.current);
+            clearPlaybackTimers();
             saveMovieProgress(movie.id, videoRef.current?.currentTime, videoRef.current?.duration);
             setPlaying(false);
             setPlayRequested(false);
             setVideoLoading(false);
             closePanels();
-          }}
-          onLoadedMetadata={(event) => {
-            setDuration(event.currentTarget.duration || 0);
-            restoreProgress(event.currentTarget);
           }}
           onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
           onTimeUpdate={handleTimeUpdate}
@@ -801,8 +838,8 @@ export default function MoviePlayer({ movie, subtitles }) {
         <button className={realtimeRussian ? 'active' : ''} onClick={() => setRealtimeRussian((value) => !value)}>
           RU
         </button>
-        <button className="playbar" onClick={togglePlay} aria-label={playing ? t('player_pause') || 'Pause' : t('player_play') || 'Play'}>
-          {playing ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}
+        <button className="playbar" onClick={togglePlay} aria-label={playing || playRequested ? t('player_pause') || 'Pause' : t('player_play') || 'Play'}>
+          {playing || playRequested ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}
         </button>
         <span className="time-readout">
           {formatTime(currentTime)} / {formatTime(duration)}

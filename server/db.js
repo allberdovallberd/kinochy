@@ -47,6 +47,7 @@ const adminAccount = {
   role: 'admin'
 };
 const defaultLanguage = 'tm';
+const optimizingMovies = new Set();
 
 const pool = process.env.DATABASE_URL
   ? new Pool({
@@ -745,6 +746,50 @@ export async function optimizeStoredVideos() {
     }
   }
   return { optimized: changed };
+}
+
+export function queueMovieVideoOptimization(movieId) {
+  if (!movieId || process.env.VIDEO_BACKGROUND_OPTIMIZE === 'false' || optimizingMovies.has(movieId)) return;
+  optimizingMovies.add(movieId);
+  setTimeout(async () => {
+    try {
+      await optimizeMovieVideo(movieId);
+    } catch (error) {
+      console.warn('[kinochy] Background video optimization skipped:', error.message);
+    } finally {
+      optimizingMovies.delete(movieId);
+    }
+  }, 1000).unref?.();
+}
+
+async function optimizeMovieVideo(movieId) {
+  const movie = await getStoredMovieById(movieId);
+  if (!movie?.videoPath) return false;
+  const previousPath = movie.videoPath;
+  const nextPath = await optimizeExistingVideoPath(previousPath);
+  if (!nextPath || nextPath === previousPath) return false;
+
+  if (!pool) {
+    const store = await readLocalStore();
+    const target = store.movies.find((item) => item.id === movieId);
+    if (!target || target.videoPath !== previousPath) {
+      await fs.unlink(nextPath).catch(() => {});
+      return false;
+    }
+    target.videoPath = nextPath;
+    await writeLocalStore(store);
+    return true;
+  }
+
+  const result = await pool.query(
+    'UPDATE movies SET video_path = $3, updated_at = now() WHERE id = $1 AND video_path = $2',
+    [movieId, previousPath, nextPath]
+  );
+  if (!result.rowCount) {
+    await fs.unlink(nextPath).catch(() => {});
+    return false;
+  }
+  return true;
 }
 
 async function ensureLocalUserForAdmin(admin) {

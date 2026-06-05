@@ -124,6 +124,7 @@ Important variables:
 - `REQUEST_TIMEOUT_MS`, `HEADERS_TIMEOUT_MS`, `KEEP_ALIVE_TIMEOUT_MS`: Node HTTP timeout settings for large uploads
 - `MEDIA_INITIAL_CHUNK_BYTES`: optional first partial video response size when a client does not send a byte range, default `0` disabled
 - `VIDEO_OPTIMIZE_ON_UPLOAD`: set to `true` only if uploads should wait for FFmpeg optimization before responding
+- `VIDEO_BACKGROUND_OPTIMIZE`: set to `false` to disable automatic background conversion of uploaded videos to stream-ready MP4
 - `DATABASE_URL`: optional direct PostgreSQL connection string for non-Docker runs
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: PostgreSQL container settings
 - `NODE_IMAGE`, `POSTGRES_IMAGE`: container image overrides if needed
@@ -132,6 +133,7 @@ Important variables:
 - `TRANSLATE_PROVIDER`, `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`: translation service config
 - `BREVO_API_KEY` or `BREVO_SMTP_KEY`: verification email provider config
 - `BREVO_API_URL`, `BREVO_API_URLS`, `BREVO_TIMEOUT_MS`, `BREVO_IP_FAMILY`: Brevo API endpoint fallback list, timeout, and IP family. Keep `BREVO_IP_FAMILY=4` on servers where IPv6 or Cloudflare routes time out.
+- `BREVO_SMTP_KEY`, `BREVO_SMTP_PASSWORD`, or `SMTP_PASSWORD`: Brevo SMTP key aliases used when API delivery times out or SMTP is preferred
 
 ## Production Notes
 
@@ -160,4 +162,6 @@ docker compose logs -f postgres
 - If Docker cannot pull images, try again or override `NODE_IMAGE` and `POSTGRES_IMAGE` in `.env`.
 - If the browser gets CORS errors, make sure `CLIENT_ORIGIN` exactly matches the URL you open in the browser.
 - If large movie uploads reset near the end, keep `VIDEO_OPTIMIZE_ON_UPLOAD=false`, rebuild the app image, and optimize videos later with `npm run videos:optimize`.
+- If an uploaded movie starts and then buffers forever, run `npm run videos:optimize` or `docker compose exec app npm run videos:optimize` so existing videos are converted to stream-ready MP4. New uploads are optimized in the background unless `VIDEO_BACKGROUND_OPTIMIZE=false`.
+- After deploying an updated image, run `docker compose exec app npm run videos:optimize` once for old uploads. This does not add fixed duration rules; it moves MP4 metadata to the front when possible and transcodes unsupported files to browser-friendly H.264/AAC MP4.
 - If media uploads work but playback fails, check `docker compose logs -f app` and verify uploaded files exist in `app_storage`.
