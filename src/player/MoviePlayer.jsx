@@ -90,16 +90,13 @@ export default function MoviePlayer({ movie, subtitles }) {
     const video = videoRef.current;
     if (!video) return undefined;
     let hls;
-    let usingFallback = false;
     let disposed = false;
     hlsRef.current = null;
     setVideoLoading(false);
     setPlayRequested(false);
     resumeAppliedRef.current = false;
 
-    const fallbackToHls = async () => {
-      if (usingFallback) return;
-      usingFallback = true;
+    const loadHls = async () => {
       let Hls;
       try {
         ({ default: Hls } = await import('hls.js'));
@@ -109,7 +106,7 @@ export default function MoviePlayer({ movie, subtitles }) {
       if (disposed) return;
       setVideoLoading(true);
       if (Hls.isSupported()) {
-        const compactConfig = compactPlayer
+        const compactConfig = isCompactPlayback()
           ? {
               backBufferLength: 2,
               maxBufferLength: 4,
@@ -140,25 +137,23 @@ export default function MoviePlayer({ movie, subtitles }) {
 
     video.preload = 'metadata';
     if (prefersHls) {
-      fallbackToHls();
+      loadHls();
     } else {
       video.src = videoSource;
       video.load();
-      video.addEventListener('error', fallbackToHls);
     }
 
     return () => {
       disposed = true;
       window.clearTimeout(playTimeoutRef.current);
       window.clearTimeout(seekTimerRef.current);
-      video.removeEventListener('error', fallbackToHls);
       hls?.destroy();
       hlsRef.current = null;
       video.pause();
       video.removeAttribute('src');
       video.load();
     };
-  }, [compactPlayer, hlsSource, prefersHls, videoSource]);
+  }, [hlsSource, prefersHls, videoSource]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = volume;
@@ -331,6 +326,16 @@ export default function MoviePlayer({ movie, subtitles }) {
     if (playing) setVideoLoading(needsMoreVideoData(video));
   }
 
+  function commitScrubValue(value) {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(value)) return;
+    window.clearTimeout(seekTimerRef.current);
+    const next = seekVideo(video, value, true, hlsRef.current);
+    setCurrentTime(next);
+    rememberProgress(next, video.duration);
+    if (playing || playRequested) setVideoLoading(needsMoreVideoData(video));
+  }
+
   function fullscreen() {
     const shell = videoRef.current?.closest('.player-shell');
     if (!shell) return;
@@ -462,7 +467,7 @@ export default function MoviePlayer({ movie, subtitles }) {
 
   function startPlayback(video) {
     window.clearTimeout(playTimeoutRef.current);
-    video.preload = 'metadata';
+    video.preload = 'auto';
     try {
       hlsRef.current?.startLoad?.(video.currentTime || 0);
     } catch {}
@@ -756,6 +761,13 @@ export default function MoviePlayer({ movie, subtitles }) {
           value={Math.min(currentTime, Number.isFinite(duration) ? duration : currentTime)}
           onInput={scrub}
           onChange={commitScrub}
+          onPointerUp={(event) => commitScrubValue(Number(event.currentTarget.value))}
+          onTouchEnd={(event) => commitScrubValue(Number(event.currentTarget.value))}
+          onKeyUp={(event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
+              commitScrubValue(Number(event.currentTarget.value));
+            }
+          }}
           style={{ '--progress': `${duration ? (currentTime / duration) * 100 : 0}%` }}
           aria-label={t('player_seek')}
         />
@@ -1362,6 +1374,11 @@ function clearMovieProgress(movieId) {
 
 function needsMoreVideoData(video) {
   return Boolean(video && video.readyState < getMediaReadyState('HAVE_FUTURE_DATA', 3));
+}
+
+function isCompactPlayback() {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia('(max-width: 820px), (pointer: coarse)').matches;
 }
 
 function useCompactPlayer() {

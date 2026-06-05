@@ -13,8 +13,34 @@ const initialForm = {
   confirmNewPassword: ''
 };
 
+const verificationStorageKey = 'kinochy:pending-verification';
+
 function cloneAuthForm() {
   return { ...initialForm };
+}
+
+function readPendingVerification() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(verificationStorageKey);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePendingVerification(value) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(verificationStorageKey, JSON.stringify(value));
+  } catch {}
+}
+
+function clearPendingVerification() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem(verificationStorageKey);
+  } catch {}
 }
 
 export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
@@ -30,9 +56,28 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
 
   useEffect(() => {
     if (panel !== 'verify') return undefined;
+    setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
+    const sync = () => setNow(Date.now());
+    window.addEventListener('focus', sync);
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', sync);
+      document.removeEventListener('visibilitychange', sync);
+    };
   }, [panel]);
+
+  useEffect(() => {
+    const saved = readPendingVerification();
+    if (!saved || mode !== 'signup') return;
+    if (Date.parse(saved.expiresAt || 0) <= Date.now()) {
+      clearPendingVerification();
+      return;
+    }
+    setVerification(saved);
+    setPanel('verify');
+  }, [mode]);
 
   function update(event) {
     setForm((value) => ({ ...value, [event.target.name]: event.target.value }));
@@ -74,6 +119,7 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
             method: 'POST',
             body: JSON.stringify({ email: verification.email, code: verification.code })
           });
+          clearPendingVerification();
           setPanel('reset');
           return;
         }
@@ -82,6 +128,7 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
           method: 'POST',
           body: JSON.stringify({ email: verification.email, code: verification.code })
         });
+        clearPendingVerification();
         onAuth?.(data.user);
         if (!embedded) navigate('/');
         return;
@@ -94,6 +141,7 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
           method: 'POST',
           body: JSON.stringify({ email: verification.email, code: verification.code, password: form.newPassword })
         });
+        clearPendingVerification();
         setForm(cloneAuthForm());
         setPanel('login');
         return;
@@ -121,11 +169,17 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
         method: 'POST',
         body: JSON.stringify({ email: verification.email })
       });
-      setVerification((value) => ({
-        ...value,
+      const nextVerification = {
+        ...verification,
         expiresAt: data.pending.verificationExpiresAt,
         canResendAt: Date.now() + 30 * 1000
+      };
+      setVerification((value) => ({
+        ...value,
+        expiresAt: nextVerification.expiresAt,
+        canResendAt: nextVerification.canResendAt
       }));
+      savePendingVerification(nextVerification);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -134,14 +188,16 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
   }
 
   function openVerificationPanel(flow, pending) {
-    setVerification({
+    const nextVerification = {
       flow,
       email: pending.email,
       username: pending.username || form.username,
       code: '',
       expiresAt: pending.verificationExpiresAt,
       canResendAt: Date.now() + 30 * 1000
-    });
+    };
+    setVerification(nextVerification);
+    savePendingVerification(nextVerification);
     setPanel('verify');
   }
 
@@ -149,6 +205,7 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
     setPanel(nextPanel);
     setForm(cloneAuthForm());
     setVisiblePasswords({});
+    if (nextPanel !== 'verify') clearPendingVerification();
     setError('');
   }
 
@@ -156,7 +213,8 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth }) {
     setVisiblePasswords((value) => ({ ...value, [name]: !value[name] }));
   }
 
-  const verifySeconds = Math.max(0, Math.ceil((Date.parse(verification.expiresAt || 0) - now) / 1000));
+  const verifyExpiresAt = Date.parse(verification.expiresAt || 0);
+  const verifySeconds = Number.isFinite(verifyExpiresAt) ? Math.max(0, Math.ceil((verifyExpiresAt - now) / 1000)) : 0;
   const resendSeconds = Math.max(0, Math.ceil((verification.canResendAt - now) / 1000));
 
   return (

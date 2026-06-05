@@ -122,7 +122,7 @@ Important variables:
 - `JWT_SECRET`: JWT signing secret
 - `UPLOAD_MAX_BYTES`: maximum size for each uploaded file, default `8589934592` bytes
 - `REQUEST_TIMEOUT_MS`, `HEADERS_TIMEOUT_MS`, `KEEP_ALIVE_TIMEOUT_MS`: Node HTTP timeout settings for large uploads
-- `MEDIA_INITIAL_CHUNK_BYTES`: first partial video response size when a client does not send a byte range, default `4194304`
+- `MEDIA_INITIAL_CHUNK_BYTES`: optional first partial video response size when a client does not send a byte range, default `0` disabled
 - `VIDEO_OPTIMIZE_ON_UPLOAD`: set to `true` only if uploads should wait for FFmpeg optimization before responding
 - `DATABASE_URL`: optional direct PostgreSQL connection string for non-Docker runs
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: PostgreSQL container settings
@@ -131,7 +131,7 @@ Important variables:
 - `DEFAULT_USER_NAME`, `DEFAULT_USER_EMAIL`, `DEFAULT_USER_PASSWORD`: default seeded user
 - `TRANSLATE_PROVIDER`, `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`: translation service config
 - `BREVO_API_KEY` or `BREVO_SMTP_KEY`: verification email provider config
-- `BREVO_API_URL`, `BREVO_TIMEOUT_MS`, `BREVO_IP_FAMILY`: Brevo API endpoint, timeout, and IP family. Keep `BREVO_IP_FAMILY=4` on servers where IPv6 or Cloudflare routes time out.
+- `BREVO_API_URL`, `BREVO_API_URLS`, `BREVO_TIMEOUT_MS`, `BREVO_IP_FAMILY`: Brevo API endpoint fallback list, timeout, and IP family. Keep `BREVO_IP_FAMILY=4` on servers where IPv6 or Cloudflare routes time out.
 
 ## Production Notes
 

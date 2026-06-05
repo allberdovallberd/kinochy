@@ -86,7 +86,7 @@ if (appBasePath) {
 }
 
 const uploadMaxBytes = Number(process.env.UPLOAD_MAX_BYTES || 8 * 1024 * 1024 * 1024);
-const initialMediaChunkBytes = Number(process.env.MEDIA_INITIAL_CHUNK_BYTES || 4 * 1024 * 1024);
+const initialMediaChunkBytes = Number(process.env.MEDIA_INITIAL_CHUNK_BYTES || 0);
 const upload = multer({
   storage: multer.diskStorage({
     destination: uploadRoot,
@@ -644,7 +644,7 @@ function streamFile(req, res, filePath, contentType) {
   }
 
   if (!range) {
-    if (req.method === 'GET' && contentType.startsWith('video/') && stat.size > initialMediaChunkBytes) {
+    if (req.method === 'GET' && contentType.startsWith('video/') && initialMediaChunkBytes > 0 && stat.size > initialMediaChunkBytes) {
       const end = Math.min(initialMediaChunkBytes - 1, stat.size - 1);
       res.writeHead(206, {
         ...baseHeaders,

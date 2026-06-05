@@ -67,7 +67,7 @@ async function sendViaBrevoSmtp({ email, username, code, smtpKey }) {
 }
 
 async function sendViaBrevoApi({ email, username, code, apiKey }) {
-  const apiUrl = process.env.BREVO_API_URL || 'https://api.brevo.com/v3/smtp/email';
+  const apiUrls = getBrevoApiUrls();
   const timeoutMs = Number(process.env.BREVO_TIMEOUT_MS || 45000);
   const ipFamily = Number(process.env.BREVO_IP_FAMILY || 4);
   const payload = {
@@ -80,17 +80,16 @@ async function sendViaBrevoApi({ email, username, code, apiKey }) {
     htmlContent: getVerificationHtml(code)
   };
 
-  const response = await retry(async () => {
-    return postJson(apiUrl, payload, {
-      timeoutMs,
-      family: ipFamily,
-      headers: {
-        accept: 'application/json',
-        'api-key': apiKey,
-        'content-type': 'application/json'
-      }
-    });
-  }, 3);
+  const response = await postWithFallback(apiUrls, payload, {
+    attempts: 2,
+    timeoutMs,
+    family: ipFamily,
+    headers: {
+      accept: 'application/json',
+      'api-key': apiKey,
+      'content-type': 'application/json'
+    }
+  });
 
   if (response.status < 200 || response.status >= 300) {
     const message = response.text.includes('SMTP account is not yet activated')
@@ -102,6 +101,17 @@ async function sendViaBrevoApi({ email, username, code, apiKey }) {
   }
 
   return response.text ? JSON.parse(response.text) : {};
+}
+
+function getBrevoApiUrls() {
+  const explicit = String(process.env.BREVO_API_URLS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (explicit.length) return explicit;
+
+  const primary = process.env.BREVO_API_URL || 'https://api.brevo.com/v3/smtp/email';
+  return [...new Set([primary, 'https://api.sendinblue.com/v3/smtp/email'])];
 }
 
 function normalizeBrevoApiError(error) {
@@ -164,6 +174,18 @@ async function retry(work, attempts) {
       lastError = error;
       if (attempt === attempts) throw error;
       await new Promise((resolve) => setTimeout(resolve, attempt * 1200));
+    }
+  }
+  throw lastError;
+}
+
+async function postWithFallback(urls, payload, options) {
+  let lastError;
+  for (const url of urls) {
+    try {
+      return await retry(() => postJson(url, payload, options), options.attempts || 2);
+    } catch (error) {
+      lastError = error;
     }
   }
   throw lastError;
