@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
+import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -17,8 +18,35 @@ export async function prepareUploadedVideo(file) {
 }
 
 export async function optimizeExistingVideoPath(filePath) {
-  if (!filePath || isPreparedMp4(filePath)) return filePath;
+  if (!filePath) return filePath;
+  if (isPreparedMp4(filePath)) {
+    await ensureHlsPlaylist(filePath);
+    return filePath;
+  }
   return optimizeVideoFile(filePath);
+}
+
+export function hlsDirectoryForVideoPath(filePath) {
+  if (!filePath) return '';
+  const ext = path.extname(filePath);
+  return path.join(path.dirname(filePath), `${path.basename(filePath, ext)}.hls`);
+}
+
+export function hlsPlaylistPathForVideo(filePath) {
+  const dir = hlsDirectoryForVideoPath(filePath);
+  return dir ? path.join(dir, 'index.m3u8') : '';
+}
+
+export function hasHlsPlaylist(filePath) {
+  const playlistPath = hlsPlaylistPathForVideo(filePath);
+  return Boolean(playlistPath && fsSync.existsSync(playlistPath));
+}
+
+export function hlsSegmentPathForVideo(filePath, segmentName) {
+  const cleanName = path.basename(String(segmentName || ''));
+  if (!/^segment-\d{5}\.ts$/i.test(cleanName)) return '';
+  const segmentPath = path.join(hlsDirectoryForVideoPath(filePath), cleanName);
+  return fsSync.existsSync(segmentPath) ? segmentPath : '';
 }
 
 function isPreparedMp4(filePath) {
@@ -84,7 +112,77 @@ async function optimizeVideoFile(inputPath) {
   }
 
   await removeFile(inputPath);
+  await ensureHlsPlaylist(outputPath);
   return outputPath;
+}
+
+async function ensureHlsPlaylist(inputPath) {
+  if (process.env.VIDEO_HLS_ENABLE === 'false' || !inputPath || hasHlsPlaylist(inputPath)) return;
+  const hlsDir = hlsDirectoryForVideoPath(inputPath);
+  const tmpDir = `${hlsDir}.${crypto.randomUUID()}.tmp`;
+  await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  await fs.mkdir(tmpDir, { recursive: true });
+
+  const segmentPath = path.join(tmpDir, 'segment-%05d.ts');
+  const playlistPath = path.join(tmpDir, 'index.m3u8');
+  const args = [
+    '-y',
+    '-i',
+    inputPath,
+    '-map',
+    '0:v:0',
+    '-map',
+    '0:a?',
+    '-sn',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '23',
+    '-g',
+    '48',
+    '-keyint_min',
+    '48',
+    '-sc_threshold',
+    '0',
+    '-c:a',
+    'aac',
+    '-b:a',
+    '128k',
+    '-hls_time',
+    '4',
+    '-hls_playlist_type',
+    'vod',
+    '-hls_flags',
+    'independent_segments',
+    '-hls_segment_filename',
+    segmentPath,
+    playlistPath
+  ];
+
+  try {
+    await runFfmpeg(args);
+    await rewriteHlsPlaylist(playlistPath);
+    await fs.rm(hlsDir, { recursive: true, force: true }).catch(() => {});
+    await fs.rename(tmpDir, hlsDir);
+  } catch (error) {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    console.warn('[kinochy] HLS generation skipped:', error.message);
+  }
+}
+
+async function rewriteHlsPlaylist(playlistPath) {
+  const playlist = await fs.readFile(playlistPath, 'utf8');
+  const rewritten = playlist
+    .split(/\r?\n/)
+    .map((line) => {
+      const clean = line.trim();
+      if (!clean || clean.startsWith('#') || !/\.ts(?:$|\?)/i.test(clean)) return line;
+      return `hls/${path.basename(clean)}`;
+    })
+    .join('\n');
+  await fs.writeFile(playlistPath, `${rewritten.replace(/\n*$/, '')}\n`);
 }
 
 function runFfmpeg(args) {

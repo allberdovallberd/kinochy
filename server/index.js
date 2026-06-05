@@ -48,6 +48,7 @@ import {
 } from './db.js';
 import { sendVerificationEmail } from './email.js';
 import { translateText } from './translate.js';
+import { hasHlsPlaylist, hlsPlaylistPathForVideo, hlsSegmentPathForVideo } from './video.js';
 
 globalThis.crypto ??= crypto.webcrypto;
 
@@ -512,18 +513,20 @@ app.get('/media/movies/:id/playlist.m3u8', async (req, res, next) => {
   try {
     const movie = await getMovieById(req.params.id);
     if (!movie) return res.status(404).end();
-    const cues = await getSubtitles(movie.id, 'en');
-    res.type('application/vnd.apple.mpegurl').send(createByteRangePlaylist(movie, cues));
+    if (!hasHlsPlaylist(movie.videoPath)) return res.status(404).end();
+    streamFile(req, res, hlsPlaylistPathForVideo(movie.videoPath), 'application/vnd.apple.mpegurl');
   } catch (error) {
     next(error);
   }
 });
 
-app.get('/media/movies/:id/segment.ts', async (req, res, next) => {
+app.get('/media/movies/:id/hls/:segment', async (req, res, next) => {
   try {
     const movie = await getMovieById(req.params.id);
     if (!movie) return res.status(404).end();
-    streamFile(req, res, movie.videoPath, 'video/mp2t');
+    const segmentPath = hlsSegmentPathForVideo(movie.videoPath, req.params.segment);
+    if (!segmentPath) return res.status(404).end();
+    streamFile(req, res, segmentPath, 'video/mp2t');
   } catch (error) {
     next(error);
   }
@@ -695,38 +698,6 @@ function detectVideoContentType(filePath = '') {
   if (ext === '.m3u8') return 'application/vnd.apple.mpegurl';
   if (ext === '.ts') return 'video/mp2t';
   return 'application/octet-stream';
-}
-
-function createByteRangePlaylist(movie, cues = []) {
-  const stat = fs.statSync(movie.videoPath);
-  const duration = Math.max(1, Math.ceil(cues.at(-1)?.end || 7200));
-  const targetDuration = 2;
-  const segmentCount = Math.max(1, Math.ceil(duration / targetDuration));
-  const packetSize = 188;
-  const lines = [
-    '#EXTM3U',
-    '#EXT-X-VERSION:4',
-    `#EXT-X-TARGETDURATION:${targetDuration}`,
-    '#EXT-X-MEDIA-SEQUENCE:0',
-    '#EXT-X-PLAYLIST-TYPE:VOD'
-  ];
-
-  let offset = 0;
-  for (let index = 0; index < segmentCount && offset < stat.size; index += 1) {
-    const remainingBytes = stat.size - offset;
-    const remainingSegments = segmentCount - index;
-    let length = Math.ceil(remainingBytes / remainingSegments);
-    if (remainingSegments > 1) length = Math.max(packetSize, Math.floor(length / packetSize) * packetSize);
-    length = Math.min(length, remainingBytes);
-    const seconds = index === segmentCount - 1 ? Math.max(1, duration - targetDuration * index) : targetDuration;
-    lines.push(`#EXTINF:${seconds.toFixed(3)},`);
-    lines.push(`#EXT-X-BYTERANGE:${length}@${offset}`);
-    lines.push('segment.ts');
-    offset += length;
-  }
-
-  lines.push('#EXT-X-ENDLIST');
-  return `${lines.join('\n')}\n`;
 }
 
 function serializePending(pending) {

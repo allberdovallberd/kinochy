@@ -8,7 +8,7 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 - Backend: Node.js + Express
 - Database: PostgreSQL
 - Video tools: HLS.js on the client, FFmpeg in the app container
-- Email verification: Brevo
+- Email verification: Brevo API/SMTP, Gmail SMTP, or generic SMTP
 
 ## Features
 
@@ -125,15 +125,19 @@ Important variables:
 - `MEDIA_INITIAL_CHUNK_BYTES`: optional first partial video response size when a client does not send a byte range, default `0` disabled
 - `VIDEO_OPTIMIZE_ON_UPLOAD`: set to `true` only if uploads should wait for FFmpeg optimization before responding
 - `VIDEO_BACKGROUND_OPTIMIZE`: set to `false` to disable automatic background conversion of uploaded videos to stream-ready MP4
+- `VIDEO_HLS_ENABLE`: set to `false` to disable automatic HLS segment generation. HLS is preferred by the player when available because it loads and seeks through small video segments.
 - `DATABASE_URL`: optional direct PostgreSQL connection string for non-Docker runs
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: PostgreSQL container settings
 - `NODE_IMAGE`, `POSTGRES_IMAGE`: container image overrides if needed
 - `ADMIN_EMAIL`, `ADMIN_USER_NAME`, `ADMIN_PASSWORD`: initial admin account
 - `DEFAULT_USER_NAME`, `DEFAULT_USER_EMAIL`, `DEFAULT_USER_PASSWORD`: default seeded user
 - `TRANSLATE_PROVIDER`, `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`: translation service config
-- `BREVO_API_KEY` or `BREVO_SMTP_KEY`: verification email provider config
+- `EMAIL_PROVIDER`: `brevo`, `gmail`, or `smtp`
+- `BREVO_API_KEY` or `BREVO_SMTP_KEY`: Brevo verification email provider config
 - `BREVO_API_URL`, `BREVO_API_URLS`, `BREVO_TIMEOUT_MS`, `BREVO_IP_FAMILY`: Brevo API endpoint fallback list, timeout, and IP family. Keep `BREVO_IP_FAMILY=4` on servers where IPv6 or Cloudflare routes time out.
 - `BREVO_SMTP_KEY`, `BREVO_SMTP_PASSWORD`, or `SMTP_PASSWORD`: Brevo SMTP key aliases used when API delivery times out or SMTP is preferred
+- `GMAIL_SMTP_USER`, `GMAIL_APP_PASSWORD`: Google/Gmail SMTP verification email config. Use a Google app password, not the normal account password.
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`: generic SMTP verification email config
 
 ## Production Notes
 
@@ -163,5 +167,5 @@ docker compose logs -f postgres
 - If the browser gets CORS errors, make sure `CLIENT_ORIGIN` exactly matches the URL you open in the browser.
 - If large movie uploads reset near the end, keep `VIDEO_OPTIMIZE_ON_UPLOAD=false`, rebuild the app image, and optimize videos later with `npm run videos:optimize`.
 - If an uploaded movie starts and then buffers forever, run `npm run videos:optimize` or `docker compose exec app npm run videos:optimize` so existing videos are converted to stream-ready MP4. New uploads are optimized in the background unless `VIDEO_BACKGROUND_OPTIMIZE=false`.
-- After deploying an updated image, run `docker compose exec app npm run videos:optimize` once for old uploads. This does not add fixed duration rules; it moves MP4 metadata to the front when possible and transcodes unsupported files to browser-friendly H.264/AAC MP4.
+- After deploying an updated image, run `docker compose exec app npm run videos:optimize` once for old uploads. This does not add fixed duration rules; it moves MP4 metadata to the front when possible, transcodes unsupported files to browser-friendly H.264/AAC MP4, and creates HLS segments when enabled.
 - If media uploads work but playback fails, check `docker compose logs -f app` and verify uploaded files exist in `app_storage`.

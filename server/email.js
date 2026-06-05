@@ -3,45 +3,91 @@ import http from 'node:http';
 import https from 'node:https';
 
 export async function sendVerificationEmail({ email, username, code }) {
-  const smtpKey = getSmtpKey();
+  const smtpConfig = getSmtpConfig();
   const apiKey = String(process.env.BREVO_API_KEY || '').trim();
-  if (apiKey) {
+  const provider = String(process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
+
+  if ((provider === 'gmail' || provider === 'smtp') && smtpConfig) {
+    return sendViaSmtp({ email, username, code, smtpConfig });
+  }
+
+  if (apiKey && provider !== 'smtp' && provider !== 'gmail') {
     try {
       return await sendViaBrevoApi({ email, username, code, apiKey });
     } catch (error) {
-      if (!smtpKey) throw normalizeBrevoApiError(error);
+      if (!smtpConfig) throw normalizeBrevoApiError(error);
     }
   }
-  if (smtpKey) return sendViaBrevoSmtp({ email, username, code, smtpKey });
+  if (smtpConfig) return sendViaSmtp({ email, username, code, smtpConfig });
 
-  const error = new Error('Brevo is not configured. Set BREVO_SMTP_KEY or BREVO_API_KEY.');
+  const error = new Error('Email verification is not configured. Set BREVO_API_KEY, Gmail SMTP settings, or generic SMTP settings.');
   error.status = 503;
   throw error;
 }
 
-function getSmtpKey() {
-  return String(process.env.BREVO_SMTP_KEY || process.env.BREVO_SMTP_PASSWORD || process.env.SMTP_PASSWORD || '').trim();
+function getSmtpConfig() {
+  const gmailUser = String(process.env.GMAIL_SMTP_USER || '').trim();
+  const gmailPassword = String(process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_SMTP_PASSWORD || '').trim();
+  if (gmailUser && gmailPassword) {
+    return {
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      user: gmailUser,
+      pass: gmailPassword,
+      senderEmail: process.env.EMAIL_SENDER_EMAIL || process.env.GMAIL_SENDER_EMAIL || gmailUser,
+      senderName: process.env.EMAIL_SENDER_NAME || process.env.GMAIL_SENDER_NAME || 'Kinochy'
+    };
+  }
+
+  const genericHost = String(process.env.SMTP_HOST || '').trim();
+  const genericUser = String(process.env.SMTP_USER || '').trim();
+  const genericPassword = String(process.env.SMTP_PASSWORD || '').trim();
+  if (genericHost && genericUser && genericPassword) {
+    const port = Number(process.env.SMTP_PORT || 587);
+    return {
+      host: genericHost,
+      port,
+      secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465,
+      user: genericUser,
+      pass: genericPassword,
+      senderEmail: process.env.EMAIL_SENDER_EMAIL || process.env.SMTP_SENDER_EMAIL || genericUser,
+      senderName: process.env.EMAIL_SENDER_NAME || process.env.SMTP_SENDER_NAME || 'Kinochy'
+    };
+  }
+
+  const brevoSmtpKey = String(process.env.BREVO_SMTP_KEY || process.env.BREVO_SMTP_PASSWORD || '').trim();
+  if (brevoSmtpKey) {
+    const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_SENDER_EMAIL || 'allberdovallberd@gmail.com';
+    const smtpPort = Number(process.env.BREVO_SMTP_PORT || 587);
+    return {
+      host: process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com',
+      port: smtpPort,
+      secure: smtpPort === 465,
+      user: process.env.BREVO_SMTP_LOGIN || senderEmail,
+      pass: brevoSmtpKey,
+      senderEmail,
+      senderName: process.env.BREVO_SENDER_NAME || process.env.EMAIL_SENDER_NAME || 'Allberdov Allberd'
+    };
+  }
+
+  return null;
 }
 
-async function sendViaBrevoSmtp({ email, username, code, smtpKey }) {
-  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'allberdovallberd@gmail.com';
-  const senderName = process.env.BREVO_SENDER_NAME || 'Allberdov Allberd';
-  const smtpLogin = process.env.BREVO_SMTP_LOGIN || senderEmail;
-  const smtpPort = Number(process.env.BREVO_SMTP_PORT || 587);
-
+async function sendViaSmtp({ email, username, code, smtpConfig }) {
   const transport = nodemailer.createTransport({
-    host: process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com',
-    port: smtpPort,
-    secure: smtpPort === 465,
+    host: smtpConfig.host,
+    port: smtpConfig.port,
+    secure: smtpConfig.secure,
     auth: {
-      user: smtpLogin,
-      pass: smtpKey
+      user: smtpConfig.user,
+      pass: smtpConfig.pass
     }
   });
 
   try {
     return await transport.sendMail({
-      from: `"${senderName}" <${senderEmail}>`,
+      from: `"${smtpConfig.senderName}" <${smtpConfig.senderEmail}>`,
       to: `"${username || email}" <${email}>`,
       subject: 'Your Kinochy verification code',
       html: getVerificationHtml(code)
@@ -60,10 +106,10 @@ async function sendViaBrevoSmtp({ email, username, code, smtpKey }) {
 
     const error = new Error(
       authFailed
-        ? 'Brevo SMTP authentication failed. Check BREVO_SMTP_LOGIN and BREVO_SMTP_KEY from Brevo SMTP settings.'
+        ? 'SMTP authentication failed. Check Gmail app password or SMTP login/password settings.'
         : activationLike
-        ? 'Brevo SMTP sending is not activated yet. Verify sender and enable transactional SMTP access in Brevo.'
-        : `Brevo SMTP email failed: ${message || 'Unknown SMTP error'}`
+        ? 'SMTP sending is not activated or the sender is not authorized.'
+        : `SMTP email failed: ${message || 'Unknown SMTP error'}`
     );
     error.status = 503;
     throw error;

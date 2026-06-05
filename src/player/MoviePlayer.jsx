@@ -83,7 +83,7 @@ export default function MoviePlayer({ movie, subtitles }) {
   const fontFamily = fontMap[subtitleStyle.font] || fontMap.Museo;
   const videoSource = useMemo(() => withBasePath(`/media/movies/${movie.id}/video`), [movie.id]);
   const hlsSource = useMemo(() => withBasePath(`/media/movies/${movie.id}/playlist.m3u8`), [movie.id]);
-  const prefersHls = String(movie.fileNames?.video || '').toLowerCase().endsWith('.ts');
+  const prefersHls = Boolean(movie.streaming?.hls);
   const showPlayerLoader = videoLoading && (playing || playRequested);
   const controlsPinned = settingsOpen || playerToolsOpen || volumeOpen;
 
@@ -130,6 +130,14 @@ export default function MoviePlayer({ movie, subtitles }) {
         hlsRef.current = hls;
         hls.loadSource(hlsSource);
         hls.attachMedia(video);
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (!data?.fatal) return;
+          hls.destroy();
+          hlsRef.current = null;
+          video.src = videoSource;
+          video.load();
+          finishBuffering();
+        });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = hlsSource;
         video.load();

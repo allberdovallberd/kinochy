@@ -4,7 +4,7 @@ import path from 'node:path';
 import bcrypt from 'bcryptjs';
 import { Pool } from 'pg';
 import { parseSrt } from './srt.js';
-import { optimizeExistingVideoPath, prepareUploadedVideo } from './video.js';
+import { hasHlsPlaylist, hlsDirectoryForVideoPath, optimizeExistingVideoPath, prepareUploadedVideo } from './video.js';
 
 const localStorePath = path.resolve('storage/data.json');
 const localUsersPath = path.resolve('storage/users.json');
@@ -1147,6 +1147,9 @@ function toClientMovie(movie) {
       video: videoPath ? path.basename(videoPath) : '',
       subtitleEn: subtitleEnPath ? path.basename(subtitleEnPath) : subtitles?.en?.length ? 'English subtitles' : '',
       subtitleRu: subtitleRuPath ? path.basename(subtitleRuPath) : subtitles?.ru?.length ? 'Russian subtitles' : ''
+    },
+    streaming: {
+      hls: hasHlsPlaylist(videoPath)
     }
   };
 }
@@ -1168,9 +1171,10 @@ async function cleanupReplacedMovieFiles(existing, replacements) {
   }
   if (replacements.video && existing.videoPath) {
     paths.push(path.resolve(existing.videoPath));
+    paths.push(path.resolve(hlsDirectoryForVideoPath(existing.videoPath)));
   }
 
-  await Promise.all(paths.map((filePath) => fs.unlink(filePath).catch(() => {})));
+  await Promise.all(paths.map(removeFileOrDirectory));
 }
 
 async function cleanupTempFiles(paths = []) {
@@ -1181,8 +1185,16 @@ async function cleanupMovieFiles(movie) {
   if (!movie) return;
   const paths = [];
   if (movie.coverUrl?.startsWith('/media/uploads/')) paths.push(path.resolve('storage/uploads', path.basename(movie.coverUrl)));
-  if (movie.videoPath) paths.push(path.resolve(movie.videoPath));
-  await Promise.all(paths.map((filePath) => fs.unlink(filePath).catch(() => {})));
+  if (movie.videoPath) {
+    paths.push(path.resolve(movie.videoPath));
+    paths.push(path.resolve(hlsDirectoryForVideoPath(movie.videoPath)));
+  }
+  await Promise.all(paths.map(removeFileOrDirectory));
+}
+
+async function removeFileOrDirectory(filePath) {
+  if (!filePath) return;
+  await fs.rm(filePath, { recursive: true, force: true }).catch(() => {});
 }
 
 async function ensureLocalStore() {
