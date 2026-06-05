@@ -19,11 +19,19 @@ export async function prepareUploadedVideo(file) {
 
 export async function optimizeExistingVideoPath(filePath) {
   if (!filePath) return filePath;
+  if (!videoFileExists(filePath)) {
+    console.warn(`[kinochy] Video optimization skipped: missing file ${filePath}`);
+    return filePath;
+  }
   if (isPreparedMp4(filePath)) {
     await ensureHlsPlaylist(filePath);
     return filePath;
   }
   return optimizeVideoFile(filePath);
+}
+
+export function videoFileExists(filePath) {
+  return Boolean(filePath && fsSync.existsSync(filePath));
 }
 
 export function hlsDirectoryForVideoPath(filePath) {
@@ -118,6 +126,10 @@ async function optimizeVideoFile(inputPath) {
 
 async function ensureHlsPlaylist(inputPath) {
   if (process.env.VIDEO_HLS_ENABLE === 'false' || !inputPath || hasHlsPlaylist(inputPath)) return;
+  if (!videoFileExists(inputPath)) {
+    console.warn(`[kinochy] HLS generation skipped: missing file ${inputPath}`);
+    return;
+  }
   const hlsDir = hlsDirectoryForVideoPath(inputPath);
   const tmpDir = `${hlsDir}.${crypto.randomUUID()}.tmp`;
   await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
@@ -189,11 +201,27 @@ function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
     const child = spawn('ffmpeg', args, { windowsHide: true });
     let stderr = '';
+    let settled = false;
+    const cleanupSignals = () => {
+      process.off('SIGINT', stopChild);
+      process.off('SIGTERM', stopChild);
+    };
+    const stopChild = () => {
+      if (!settled) child.kill('SIGTERM');
+    };
+    process.once('SIGINT', stopChild);
+    process.once('SIGTERM', stopChild);
     child.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
     });
-    child.on('error', (error) => reject(error));
+    child.on('error', (error) => {
+      settled = true;
+      cleanupSignals();
+      reject(error);
+    });
     child.on('close', (code) => {
+      settled = true;
+      cleanupSignals();
       if (code === 0) resolve();
       else reject(new Error(stderr.trim() || `ffmpeg exited with code ${code}`));
     });

@@ -4,7 +4,7 @@ import path from 'node:path';
 import bcrypt from 'bcryptjs';
 import { Pool } from 'pg';
 import { parseSrt } from './srt.js';
-import { hasHlsPlaylist, hlsDirectoryForVideoPath, optimizeExistingVideoPath, prepareUploadedVideo } from './video.js';
+import { hasHlsPlaylist, hlsDirectoryForVideoPath, optimizeExistingVideoPath, prepareUploadedVideo, videoFileExists } from './video.js';
 
 const localStorePath = path.resolve('storage/data.json');
 const localUsersPath = path.resolve('storage/users.json');
@@ -725,7 +725,15 @@ export async function optimizeStoredVideos() {
   if (!pool) {
     const store = await readLocalStore();
     let changed = 0;
+    let skipped = 0;
+    console.log(`[kinochy] Checking ${store.movies.length} stored video file${store.movies.length === 1 ? '' : 's'}...`);
     for (const movie of store.movies) {
+      if (!videoFileExists(movie.videoPath)) {
+        skipped += 1;
+        console.warn(`[kinochy] Skipping missing video for "${movie.title || movie.id}": ${movie.videoPath}`);
+        continue;
+      }
+      console.log(`[kinochy] Optimizing "${movie.title || movie.id}"...`);
       const nextPath = await optimizeExistingVideoPath(movie.videoPath);
       if (nextPath && nextPath !== movie.videoPath) {
         movie.videoPath = nextPath;
@@ -733,19 +741,27 @@ export async function optimizeStoredVideos() {
       }
     }
     if (changed) await writeLocalStore(store);
-    return { optimized: changed };
+    return { optimized: changed, skipped };
   }
 
-  const result = await pool.query('SELECT id, video_path FROM movies ORDER BY created_at DESC');
+  const result = await pool.query('SELECT id, title, video_path FROM movies ORDER BY created_at DESC');
   let changed = 0;
+  let skipped = 0;
+  console.log(`[kinochy] Checking ${result.rows.length} stored video file${result.rows.length === 1 ? '' : 's'}...`);
   for (const row of result.rows) {
+    if (!videoFileExists(row.video_path)) {
+      skipped += 1;
+      console.warn(`[kinochy] Skipping missing video for "${row.title || row.id}": ${row.video_path}`);
+      continue;
+    }
+    console.log(`[kinochy] Optimizing "${row.title || row.id}"...`);
     const nextPath = await optimizeExistingVideoPath(row.video_path);
     if (nextPath && nextPath !== row.video_path) {
       await pool.query('UPDATE movies SET video_path = $2, updated_at = now() WHERE id = $1', [row.id, nextPath]);
       changed += 1;
     }
   }
-  return { optimized: changed };
+  return { optimized: changed, skipped };
 }
 
 export function queueMovieVideoOptimization(movieId) {
